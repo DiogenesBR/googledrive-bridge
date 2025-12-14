@@ -1,4 +1,4 @@
-# WebnovelStudio Google Drive Bridge
+# Google Drive Bridge
 
 Este projeto serve como uma ponte OAuth2 para permitir a integração do Google Drive em ambientes sem servidor (como editores online).
 
@@ -6,4 +6,4 @@ Este projeto serve como uma ponte OAuth2 para permitir a integração do Google 
 
 1. Crie credenciais do tipo **Web Application**.
 2. **Origens JavaScript Autorizadas:** `https://diogenesbr.github.io`
-3. **URIs de Redirecionamento Autorizados:** `https://diogenesbr.github.io/WebnovelStudio-googledrive-bridge/`
+3. **URIs de Redirecionamento Autorizados:** `https://diogenesbr.github.io/googledrive-bridge/`
