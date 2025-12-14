@@ -1,45 +1,125 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html>
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Google Drive Auth Bridge</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            color: #333;
+            text-align: center;
+            padding: 20px;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        h2 { margin-bottom: 10px; font-size: 1.2rem; }
+        p { color: #666; font-size: 0.9rem; }
+        .error { color: #d32f2f; }
+        .hidden { display: none; }
+    </style>
 </head>
 <body>
-    <h2>Autenticando com Google Drive...</h2>
-    <p>Esta janela deve fechar automaticamente.</p>
+
+    <div id="loader" class="loader"></div>
+    <h2 id="status">...</h2>
+    <p id="sub-status"></p>
 
     <script>
-        // 1. Verifica se o Google mandou o token na URL (hash)
-        const params = new URLSearchParams(window.location.hash.substring(1));
-        const accessToken = params.get('access_token');
-        const error = params.get('error');
+        // --- 1. Language Detection ---
+        const userLang = navigator.language || navigator.userLanguage; 
+        const isPt = userLang.startsWith('pt'); // Detects pt-BR, pt-PT, etc.
 
+        const messages = {
+            loading: isPt ? "Iniciando autenticação..." : "Initiating authentication...",
+            connected: isPt ? "Conectado! Fechando janela..." : "Connected! Closing window...",
+            errorPrefix: isPt ? "Erro: " : "Error: ",
+            missingClientId: isPt 
+                ? "Parâmetro 'client_id' não encontrado na URL." 
+                : "Missing 'client_id' parameter in URL.",
+            instruction: isPt
+                ? "Configure seu app para enviar o client_id."
+                : "Please configure your app to send the client_id."
+        };
+
+        // Helper to update UI
+        function setStatus(text, isError = false) {
+            const statusEl = document.getElementById('status');
+            statusEl.innerText = text;
+            if (isError) {
+                statusEl.classList.add('error');
+                document.getElementById('loader').classList.add('hidden');
+            }
+        }
+
+        // --- 2. Logic ---
+        const queryParams = new URLSearchParams(window.location.search);
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        
+        const accessToken = hashParams.get('access_token');
+        const error = hashParams.get('error');
+
+        // Initial Message
+        setStatus(messages.loading);
+
+        // Scenario A: Token Received (Success)
         if (accessToken) {
-            // SUCESSO: Envia o token para a janela pai (seu Editor React)
-            // Use '*' para testes, mas em produção coloque a URL do seu editor React
+            setStatus(messages.connected);
             if (window.opener) {
                 window.opener.postMessage({ 
                     type: 'GOOGLE_AUTH_SUCCESS', 
                     token: accessToken 
                 }, '*');
             }
-            document.body.innerHTML = "<h3>Conectado! Fechando...</h3>";
-            setTimeout(() => window.close(), 1000);
+            // Close after 1.5s so user sees the success message
+            setTimeout(() => window.close(), 1500);
         } 
+        
+        // Scenario B: Google returned an Error
         else if (error) {
-            // ERRO
-            document.body.innerHTML = `<h3>Erro: ${error}</h3>`;
-        }
+            setStatus(messages.errorPrefix + error, true);
+        } 
+        
+        // Scenario C: Start Login (Redirect to Google)
         else {
-            // 2. Se não tem token, significa que precisamos iniciar o login
-            // Redireciona para o Google
-            const CLIENT_ID = 'SEU_CLIENT_ID_DO_GOOGLE_CLOUD.apps.googleusercontent.com';
-            const REDIRECT_URI = window.location.href.split('#')[0]; // A própria URL atual
-            const SCOPE = 'https://www.googleapis.com/auth/drive.file'; // Permissão apenas para arquivos criados pelo app
+            const clientId = queryParams.get('client_id');
 
-            const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=${encodeURIComponent(SCOPE)}&include_granted_scopes=true&state=pass-through-value`;
+            if (!clientId) {
+                setStatus(messages.errorPrefix + messages.missingClientId, true);
+                document.getElementById('sub-status').innerText = messages.instruction;
+            } else {
+                // Construct the Google Auth URL
+                const redirectUri = window.location.origin + window.location.pathname;
+                // Clean trailing slash if needed to match Google Console exactly, though usually robust
+                // const cleanRedirect = redirectUri.endsWith('/') ? redirectUri : redirectUri + '/'; 
+                
+                const scope = 'https://www.googleapis.com/auth/drive.file';
 
-            window.location.href = authUrl;
+                const authUrl = `https://accounts.google.com/o/oauth2/v2/auth` +
+                    `?client_id=${encodeURIComponent(clientId)}` +
+                    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+                    `&response_type=token` +
+                    `&scope=${encodeURIComponent(scope)}` +
+                    `&include_granted_scopes=true` +
+                    `&state=pass-through-value`;
+
+                // Redirect
+                window.location.href = authUrl;
+            }
         }
     </script>
 </body>
