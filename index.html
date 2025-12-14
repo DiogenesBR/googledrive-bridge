@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Google Drive Auth Bridge</title>
+</head>
+<body>
+    <h2>Autenticando com Google Drive...</h2>
+    <p>Esta janela deve fechar automaticamente.</p>
+
+    <script>
+        // 1. Verifica se o Google mandou o token na URL (hash)
+        const params = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = params.get('access_token');
+        const error = params.get('error');
+
+        if (accessToken) {
+            // SUCESSO: Envia o token para a janela pai (seu Editor React)
+            // Use '*' para testes, mas em produção coloque a URL do seu editor React
+            if (window.opener) {
+                window.opener.postMessage({ 
+                    type: 'GOOGLE_AUTH_SUCCESS', 
+                    token: accessToken 
+                }, '*');
+            }
+            document.body.innerHTML = "<h3>Conectado! Fechando...</h3>";
+            setTimeout(() => window.close(), 1000);
+        } 
+        else if (error) {
+            // ERRO
+            document.body.innerHTML = `<h3>Erro: ${error}</h3>`;
+        }
+        else {
+            // 2. Se não tem token, significa que precisamos iniciar o login
+            // Redireciona para o Google
+            const CLIENT_ID = 'SEU_CLIENT_ID_DO_GOOGLE_CLOUD.apps.googleusercontent.com';
+            const REDIRECT_URI = window.location.href.split('#')[0]; // A própria URL atual
+            const SCOPE = 'https://www.googleapis.com/auth/drive.file'; // Permissão apenas para arquivos criados pelo app
+
+            const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=${encodeURIComponent(SCOPE)}&include_granted_scopes=true&state=pass-through-value`;
+
+            window.location.href = authUrl;
+        }
+    </script>
+</body>
+</html>
