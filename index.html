@@ -40,47 +40,79 @@
     <p id="sub-status"></p>
 
     <script>
-        //--- 1. Detecção de linguagem ---
-        const userLang = navigator.language || navigator.userLanguage; 
-        const isPt = userLang.startsWith('pt');
+        // ==========================================
+        // 1. DEFINIÇÕES E HELPERS (Têm que vir antes)
+        // ==========================================
         
-        // Helper para gerar Nonce (Obrigatório para id_token)
+        // Detecção de idioma
+        const userLang = navigator.language || navigator.userLanguage; 
+        const isPt = userLang.startsWith('pt'); 
+
+        const messages = {
+            loading: isPt ? "Iniciando autenticação..." : "Initiating authentication...",
+            connected: isPt ? "Conectado! Fechando janela..." : "Connected! Closing window...",
+            errorPrefix: isPt ? "Erro: " : "Error: ",
+            missingClientId: isPt 
+                ? "Parâmetro 'client_id' não encontrado na URL." 
+                : "Missing 'client_id' parameter in URL.",
+            instruction: isPt
+                ? "Configure seu app para enviar o client_id."
+                : "Please configure your app to send the client_id."
+        };
+
+        // Função para atualizar a tela
+        function setStatus(text, isError = false) {
+            const statusEl = document.getElementById('status');
+            if (statusEl) {
+                statusEl.innerText = text;
+                if (isError) {
+                    statusEl.classList.add('error');
+                    const loader = document.getElementById('loader');
+                    if(loader) loader.classList.add('hidden');
+                }
+            }
+        }
+
+        // Função para gerar segurança (Nonce)
         function generateNonce() {
             return Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
         }
 
-        // --- 2. Logic ---
+        // ==========================================
+        // 2. LÓGICA PRINCIPAL
+        // ==========================================
+        
         const queryParams = new URLSearchParams(window.location.search);
-        // O Google retorna os parâmetros na hash (#), ex: #access_token=...&id_token=...
+        // O Google retorna os tokens na HASH da URL, não na query
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         
         const accessToken = hashParams.get('access_token');
-        const idToken = hashParams.get('id_token'); // <--- NOVO: Captura o ID Token
+        const idToken = hashParams.get('id_token'); 
         const error = hashParams.get('error');
 
-        // Initial Message
+        // Mensagem inicial
         setStatus(messages.loading);
 
-        // Scenario A: Tokens Received (Success)
+        // --- CENÁRIO A: Sucesso (Tokens recebidos) ---
         if (accessToken) {
             setStatus(messages.connected);
             if (window.opener) {
                 window.opener.postMessage({ 
                     type: 'GOOGLE_AUTH_SUCCESS', 
-                    // Envia AMBOS os tokens
-                    token: accessToken,   // Para o Google Drive
-                    idToken: idToken      // Para o Firebase Auth
+                    token: accessToken,   // Para o Drive
+                    idToken: idToken      // Para o Firebase
                 }, '*');
             }
+            // Fecha a janela após 1.5s
             setTimeout(() => window.close(), 1500);
         } 
         
-        // Scenario B: Error
+        // --- CENÁRIO B: Erro retornado pelo Google ---
         else if (error) {
             setStatus(messages.errorPrefix + error, true);
         } 
         
-        // Scenario C: Start Login
+        // --- CENÁRIO C: Iniciar Login (Redirecionar) ---
         else {
             const clientId = queryParams.get('client_id');
 
@@ -90,19 +122,19 @@
             } else {
                 const redirectUri = window.location.origin + window.location.pathname;
                 
-                // MUDANÇA 1: Adicionar email, profile e openid aos escopos
+                // Escopos necessários: Drive (arquivos) + Identity (email/profile para Firebase)
                 const scope = 'https://www.googleapis.com/auth/drive.file email profile openid';
 
-                // MUDANÇA 2: Pedir 'token id_token' e adicionar 'nonce'
                 const authUrl = `https://accounts.google.com/o/oauth2/v2/auth` +
                     `?client_id=${encodeURIComponent(clientId)}` +
                     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-                    `&response_type=token id_token` + // Mudou aqui
+                    `&response_type=token id_token` +  // Pede ambos os tokens
                     `&scope=${encodeURIComponent(scope)}` +
                     `&include_granted_scopes=true` +
-                    `&nonce=${generateNonce()}` + // Obrigatório para id_token
+                    `&nonce=${generateNonce()}` +       // Obrigatório para id_token
                     `&state=pass-through-value`;
 
+                // Redireciona para o Google
                 window.location.href = authUrl;
             }
         }
